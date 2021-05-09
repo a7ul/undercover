@@ -7,6 +7,11 @@ const ENCRYPTION_DELIMITER = ".";
 const ENC_DOT_ENV_EXT = ".ecrypt";
 const ENC_OTHER_EXT = ".crypt";
 
+function printTitle() {
+  console.log(chalk`
+🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
+}
+
 function getSecretKey(password) {
   return crypto.createHash("sha256").update(password).digest();
 }
@@ -32,7 +37,10 @@ function decrypt(encrypted, key) {
   return decrypted.toString();
 }
 
-function dotEnvFileTransformer(fileContent = "", onValue = (value) => value) {
+function dotEnvFileTransformer(
+  fileContent = "",
+  processEnvLine = (key, value) => [key, value].join("=")
+) {
   const NEW_LINE_REGEX = /\n|\r|\r\n/;
   const content = fileContent.toString();
   const envLines = content.split(NEW_LINE_REGEX);
@@ -45,93 +53,80 @@ function dotEnvFileTransformer(fileContent = "", onValue = (value) => value) {
     }
     const [key, ...valueParts] = line.split("=");
     const value = valueParts.join("=");
-    const transformedValue = onValue(value);
-    return [key, transformedValue].join("=");
+    return processEnvLine(key, value);
   });
   return transformedLines.join("\n");
 }
 
-function encryptDotEnvFileValues(dotEnvFileContent, secretKey) {
+async function encryptDotEnvFile(src, secretKey) {
+  const dest = `${src}${ENC_DOT_ENV_EXT}`;
+  console.log(
+    chalk`{bold.green Encrypting values in} {magenta ${src}} -> ${dest}`
+  );
+  const content = await fs.readFile(src, { encoding: "utf-8" });
   const onValue = (value) => encrypt(value, secretKey);
-  return dotEnvFileTransformer(dotEnvFileContent, onValue);
+  const encrypted = dotEnvFileTransformer(content, onValue);
+  await fs.writeFile(dest, encrypted);
 }
 
-function decryptDotEnvFileValues(dotEnvFileContent, secretKey) {
-  const onValue = (value) => decrypt(value, secretKey);
-  return dotEnvFileTransformer(dotEnvFileContent, onValue);
+async function decryptDotEnvFile(file, secretKey) {
+  const content = await fs.readFile(file, { encoding: "utf-8" });
+  const processEnvLine = (key, value) =>
+    [key, decrypt(value, secretKey)].join("=");
+  return dotEnvFileTransformer(content, processEnvLine);
 }
 
-function encryptEntireFile(fileContent, secretKey) {
-  const content = fileContent.toString();
-  return encrypt(content, secretKey);
+async function encryptEntireFile(src, secretKey) {
+  const dest = `${src}${ENC_OTHER_EXT}`;
+  console.log(chalk`{bold.green Encrypting file} {magenta ${src}} -> ${dest}`);
+  const content = await fs.readFile(src, { encoding: "utf-8" });
+  const encrypted = encrypt(content, secretKey);
+  await fs.writeFile(dest, encrypted);
 }
 
-function decryptEntireFile(encryptedContent, secretKey) {
-  const content = encryptedContent.toString();
+async function decryptEntireFile(file, secretKey) {
+  const content = await fs.readFile(file, { encoding: "utf-8" });
   return decrypt(content, secretKey);
 }
 
 function detectFileType(filename) {
-  if (/.(env|env.*)$/g.test(filename)) {
-    return "ENV_FILE";
-  }
-  if (filename.endsWith(ENC_DOT_ENV_EXT)) {
+  const f = filename.trim();
+  if (f.endsWith(ENC_DOT_ENV_EXT)) {
     return "ENCRYPTED_ENV_FILE";
   }
-  if (filename.endsWith(ENC_OTHER_EXT)) {
+  if (f.endsWith(ENC_OTHER_EXT)) {
     return "ENCRYPTED_OTHER_FILE";
+  }
+  if (/.(env|env.*)$/g.test(f)) {
+    return "ENV_FILE";
   }
   return "OTHER_FILE";
 }
 
-async function getFile(file) {
-  const stat = await fs.stat(file);
-  if (stat.isFile()) {
-    return { file, stat, detectedType: detectFileType(file) };
-  }
-  return { file, stat };
-}
-
-async function getFiles(directoryOrFile) {
+async function getFiles(filesOrDirectories) {
   const results = [];
   try {
-    // If file
-    const rootStat = await fs.stat(directoryOrFile);
-    if (rootStat.isFile()) {
-      results.push({
-        file: directoryOrFile,
-        detectedType: detectFileType(directoryOrFile),
-      });
-      return results;
+    for (const fileOrDir of filesOrDirectories) {
+      const stat = await fs.stat(fileOrDir);
+      if (stat.isFile()) {
+        results.push(fileOrDir);
+      } else if (stat.isDirectory()) {
+        const filesInDir = await fs.readdir(fileOrDir);
+        await Promise.all(
+          filesInDir.map(async (f) => {
+            const filePath = path.join(fileOrDir, f);
+            const fileStat = await fs.stat(filePath);
+            if (fileStat.isFile()) {
+              results.push(filePath);
+            }
+          })
+        );
+      }
     }
-    // If directory
-    const fileNames = await fs.readdir(directoryOrFile);
-    await Promise.all(
-      fileNames.map(async (fileName) => {
-        const file = path.join(directoryOrFile, fileName);
-        const stat = await fs.stat(file);
-        if (stat.isFile()) {
-          results.push({ file, detectedType: detectFileType(file) });
-        }
-      })
-    );
-    return results;
   } catch (err) {
     console.error(err);
   } finally {
     return results;
-  }
-}
-
-async function updateCommand() {
-  const UPDATE_URL =
-    "https://raw.githubusercontent.com/a7ul/undercover/master/undercover.mjs";
-  const currentFile = import.meta.url.replace("file://", "");
-  const resp = await fetch(UPDATE_URL);
-  if (resp.ok) {
-    const script = await resp.text();
-    await fs.writeFile(currentFile, script, { encoding: "utf8", flag: "w" });
-    chalk.green("Updated successfully! 🚀");
   }
 }
 
@@ -145,8 +140,7 @@ async function ask(q = "Question?", choices = []) {
   return choice;
 }
 
-function processArgs() {
-  const args = process.argv.slice(3);
+function processArgs(args) {
   const options = {};
   const positional = [];
 
@@ -160,6 +154,110 @@ function processArgs() {
     }
   }
   return { options, positional };
+}
+
+async function encryptCommand(args) {
+  const { options, positional: inputFiles } = processArgs(args);
+  const files = await getFiles(inputFiles);
+
+  const filesWithType = files.map((file) => ({
+    file,
+    type: detectFileType(file),
+  }));
+
+  let filesToEncrypt = filesWithType.filter((f) =>
+    ["ENV_FILE", "OTHER_FILE"].includes(f.type)
+  );
+
+  if (options["-f"] === "true") {
+    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: "OTHER_FILE" }));
+  } else if (options["-e"] === "true") {
+    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: "ENV_FILE" }));
+  }
+
+  if (filesToEncrypt.length === 0) {
+    return console.log(chalk`{red.bold No files found to encrypt}`);
+  }
+
+  const password = await ask(chalk`{bold Enter password}`);
+  const secretKey = getSecretKey(password);
+
+  for (const fileToEncrypt of filesToEncrypt) {
+    switch (fileToEncrypt.type) {
+      case "ENV_FILE": {
+        await encryptDotEnvFile(fileToEncrypt.file, secretKey);
+        break;
+      }
+      case "OTHER_FILE": {
+        await encryptEntireFile(fileToEncrypt.file, secretKey);
+        break;
+      }
+    }
+  }
+
+  console.log(chalk`{green.bold All files encrypted successfully} 🔐`);
+}
+
+async function decryptCommand(args) {
+  const { options, positional: inputFiles } = processArgs(args);
+  const files = await getFiles(inputFiles);
+
+  const filesWithType = files.map((file) => ({
+    file,
+    type: detectFileType(file),
+  }));
+
+  let filesToDecrypt = filesWithType.filter((f) =>
+    ["ENCRYPTED_OTHER_FILE", "ENCRYPTED_ENV_FILE"].includes(f.type)
+  );
+
+  if (filesToDecrypt.length === 0) {
+    return console.log(chalk`{red.bold No files to decrypt}`);
+  }
+
+  const password = await ask(chalk`{bold Enter password}`);
+  const secretKey = getSecretKey(password);
+
+  for (const fileToDecrypt of filesToDecrypt) {
+    switch (fileToDecrypt.type) {
+      case "ENCRYPTED_ENV_FILE": {
+        console.log(
+          chalk`{bold.green Decrypting values in ${fileToDecrypt.file}}`
+        );
+        await decryptDotEnvFile(fileToDecrypt.file, secretKey);
+        break;
+      }
+      case "ENCRYPTED_OTHER_FILE": {
+        console.log(chalk`{bold.green Decrypting file ${fileToDecrypt.file}}`);
+        await decryptEntireFile(fileToDecrypt.file, secretKey);
+        break;
+      }
+    }
+  }
+
+  console.log(chalk`{green.bold All files decrypted successfully} 🔐`);
+}
+
+async function updateCommand() {
+  const answer = await ask(
+    chalk`{bold This will update this script to latest version. Continue?}`,
+    [chalk`{green yes}`, chalk`{red no}`]
+  );
+  if (!answer.toLowerCase().trim().startsWith("y")) {
+    return;
+  }
+  const UPDATE_URL =
+    "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs";
+  const currentFile = import.meta.url.replace("file://", "");
+  const resp = await fetch(UPDATE_URL);
+  if (resp.ok) {
+    const script = await resp.text();
+    await fs.writeFile(currentFile, script, { encoding: "utf8", flag: "w" });
+    chalk.green("Updated successfully! 🚀");
+  } else {
+    console.error(chalk`{red.bold Failed to update!}`, await resp.text());
+    process.exit(-1);
+  }
 }
 
 function helpCommand() {
@@ -183,56 +281,51 @@ function helpCommand() {
  
 {bold.magenta decrypt:} {bold ./undercover.mjs} {magenta decrypt} <file.crypt> | <file.ecrypt> | <dir>
 {visible
-  Decrypts the file using the secret provided in the prompt
+  Decrypts the file using the secret provided in the prompt.
   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
 }
   <dir>  {visible decrypt all files in this directory.}
 
 {bold.magenta update:} {bold ./undercover.mjs} {magenta update}
 {visible
-  Update this script to latest available version
+  Update this script to latest available version.
 }  
 
 {bold.magenta help:} {bold ./undercover.mjs} {magenta help}
 {visible
-  Show this help text
+  Show this help text.
 }`);
 }
 
-function printTitle() {
-  console.log(chalk`
-🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
+function unknownCommand(command) {
+  printTitle();
+  console.error(
+    chalk`\n{bold.red Error:} {red ${
+      command ? `Unknown command: ${command}!` : `No command specified!`
+    }}\n`
+  );
+  console.error(chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`);
+  process.exit(-1);
 }
 
 async function main() {
-  const args = processArgs();
-
-  const command = args.positional[0];
+  const [command, ...args] = process.argv.slice(3);
 
   switch (command) {
     case "encrypt":
-      encryptCommand(args);
+      await encryptCommand(args);
       break;
     case "decrypt":
-      decryptCommand(args);
+      await decryptCommand(args);
       break;
     case "update":
-      updateCommand();
+      await updateCommand();
       break;
     case "help":
       helpCommand();
       break;
     default:
-      printTitle();
-      console.error(
-        chalk`\n{bold.red Error:} {red ${
-          command ? `Unknown command ${command}` : `No command specified!`
-        }}\n`
-      );
-      console.error(
-        chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`
-      );
-      process.exit(-1);
+      unknownCommand(command);
   }
   process.exit(0);
 }

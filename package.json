@@ -1,0 +1,29 @@
+{
+  "name": "undercover",
+  "version": "1.0.0",
+  "description": "Thanks to",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "bin": {
+    "undercover": "./undercover.mjs"
+  },
+  "scripts": {
+    "start": "zx ./undercover.mjs",
+    "test": "zx ./tests/run.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a7ul/undercover.git"
+  },
+  "author": "a7ul",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/a7ul/undercover/issues"
+  },
+  "homepage": "https://github.com/a7ul/undercover#readme",
+  "dependencies": {
+    "zx": "^1.2.2"
+  }
+}

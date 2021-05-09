@@ -12,11 +12,11 @@ function printTitle() {
 🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
 }
 
-function getSecretKey(password) {
+export function getSecretKey(password) {
   return crypto.createHash("sha256").update(password).digest();
 }
 
-function encrypt(text, key) {
+export function encrypt(text, key) {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(key), iv);
   let encrypted = cipher.update(text);
@@ -24,7 +24,7 @@ function encrypt(text, key) {
   return iv.toString("hex") + ENCRYPTION_DELIMITER + encrypted.toString("hex");
 }
 
-function decrypt(encrypted, key) {
+export function decrypt(encrypted, key) {
   const [ivPart, ...textParts] = encrypted.split(ENCRYPTION_DELIMITER);
   const iv = Buffer.from(ivPart, "hex");
   const encryptedText = Buffer.from(
@@ -245,7 +245,7 @@ async function decryptCommand(args) {
 
 async function updateCommand() {
   const answer = await ask(
-    chalk`{bold This will update this script to latest version. Continue?}`,
+    chalk`{bold This will update undercover to latest version. Continue?}`,
     [chalk`{green yes}`, chalk`{red no}`]
   );
   if (!answer.toLowerCase().trim().startsWith("y")) {

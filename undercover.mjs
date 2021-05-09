@@ -7,6 +7,13 @@ const ENCRYPTION_DELIMITER = ".";
 const ENC_DOT_ENV_EXT = ".ecrypt";
 const ENC_OTHER_EXT = ".crypt";
 
+function isEqualStr(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.localeCompare(b) === 0;
+}
+
 function printTitle() {
   console.log(chalk`
 🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
@@ -35,6 +42,18 @@ export function decrypt(encrypted, key) {
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString();
+}
+
+export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
+  if (!previouslyEncrypted) {
+    return encrypt(text, key);
+  }
+  const previousText = decrypt(previouslyEncrypted, key);
+  if (isEqualStr(text, previousText)) {
+    return previouslyEncrypted;
+  } else {
+    return encrypt(text, key);
+  }
 }
 
 function dotEnvFileTransformer(
@@ -268,11 +287,11 @@ async function updateCommand() {
 function helpCommand() {
   printTitle();
   console.log(chalk`
-{bold.underline Usage:} {bold ./undercover.mjs} {magenta <command> [options]} <file> | <dir>
+{bold.underline Usage:} {bold ./undercover.mjs} {magenta <command> [options]} <file...> | <dir...>
 
 {bold.underline Command:}
 
-{bold.magenta encrypt:} {bold ./undercover.mjs} {magenta encrypt [-f | -e]} <file> | <dir>
+{bold.magenta encrypt:} {bold ./undercover.mjs} {magenta encrypt [-f | -e]} <file...> | <dir...>
 {visible
   Encrypts the file using a secret. 
   If the file is detected as a dot env file, then only the values are encrypted and keys are left in plain text. 
@@ -284,7 +303,7 @@ function helpCommand() {
   -f     {visible force encrypt entire file.}
   -e     {visible force encrypt a file as if it was an env file. Encrypt only the values.}
  
-{bold.magenta decrypt:} {bold ./undercover.mjs} {magenta decrypt} <file.crypt> | <file.ecrypt> | <dir>
+{bold.magenta decrypt:} {bold ./undercover.mjs} {magenta decrypt} <file.crypt...> | <file.ecrypt...> | <dir...>
 {visible
   Decrypts the file using the secret provided in the prompt.
   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
@@ -335,4 +354,6 @@ async function main() {
   process.exit(0);
 }
 
-await main();
+if (process.env.NODE_ENV !== "test") {
+  await main();
+}

@@ -1,5 +1,5 @@
 {
-  "name": "undercover",
+  "name": "undercover-cli",
   "version": "1.0.0",
   "description": "Thanks to",
   "main": "index.js",
@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "zx ./undercover.mjs",
-    "test": "zx ./tests/run.mjs"
+    "test": "NODE_ENV=test zx ./tests/run.mjs"
   },
   "repository": {
     "type": "git",

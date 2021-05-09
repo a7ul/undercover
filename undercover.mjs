@@ -64,16 +64,22 @@ async function encryptDotEnvFile(src, secretKey) {
     chalk`{bold.green Encrypting values in} {magenta ${src}} -> ${dest}`
   );
   const content = await fs.readFile(src, { encoding: "utf-8" });
-  const onValue = (value) => encrypt(value, secretKey);
-  const encrypted = dotEnvFileTransformer(content, onValue);
+  const processEnvLine = (key, value) =>
+    [key, encrypt(value, secretKey)].join("=");
+  const encrypted = dotEnvFileTransformer(content, processEnvLine);
   await fs.writeFile(dest, encrypted);
 }
 
-async function decryptDotEnvFile(file, secretKey) {
-  const content = await fs.readFile(file, { encoding: "utf-8" });
+async function decryptDotEnvFile(src, secretKey) {
+  const dest = src.slice(0, -ENC_DOT_ENV_EXT.length);
+  console.log(
+    chalk`{bold.green Decrypting values in} {magenta ${src}} -> ${dest}`
+  );
+  const content = await fs.readFile(src, { encoding: "utf-8" });
   const processEnvLine = (key, value) =>
     [key, decrypt(value, secretKey)].join("=");
-  return dotEnvFileTransformer(content, processEnvLine);
+  const decrypted = dotEnvFileTransformer(content, processEnvLine);
+  await fs.writeFile(dest, decrypted);
 }
 
 async function encryptEntireFile(src, secretKey) {
@@ -84,9 +90,12 @@ async function encryptEntireFile(src, secretKey) {
   await fs.writeFile(dest, encrypted);
 }
 
-async function decryptEntireFile(file, secretKey) {
-  const content = await fs.readFile(file, { encoding: "utf-8" });
-  return decrypt(content, secretKey);
+async function decryptEntireFile(src, secretKey) {
+  const dest = src.slice(0, -ENC_OTHER_EXT.length);
+  console.log(chalk`{bold.green Decrypting file} {magenta ${src}} -> ${dest}`);
+  const content = await fs.readFile(src, { encoding: "utf-8" });
+  const decrypted = decrypt(content, secretKey);
+  await fs.writeFile(dest, decrypted);
 }
 
 function detectFileType(filename) {
@@ -221,14 +230,10 @@ async function decryptCommand(args) {
   for (const fileToDecrypt of filesToDecrypt) {
     switch (fileToDecrypt.type) {
       case "ENCRYPTED_ENV_FILE": {
-        console.log(
-          chalk`{bold.green Decrypting values in ${fileToDecrypt.file}}`
-        );
         await decryptDotEnvFile(fileToDecrypt.file, secretKey);
         break;
       }
       case "ENCRYPTED_OTHER_FILE": {
-        console.log(chalk`{bold.green Decrypting file ${fileToDecrypt.file}}`);
         await decryptEntireFile(fileToDecrypt.file, secretKey);
         break;
       }

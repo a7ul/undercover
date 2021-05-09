@@ -123,8 +123,9 @@ async function getFiles(directoryOrFile) {
   }
 }
 
-async function update() {
-  const UPDATE_URL = "http://google.com"; //TODO: replace this with main
+async function updateCommand() {
+  const UPDATE_URL =
+    "https://raw.githubusercontent.com/a7ul/undercover/master/undercover.mjs";
   const currentFile = import.meta.url.replace("file://", "");
   const resp = await fetch(UPDATE_URL);
   if (resp.ok) {
@@ -133,8 +134,6 @@ async function update() {
     chalk.green("Updated successfully! 🚀");
   }
 }
-
-// -------------------------
 
 async function ask(q = "Question?", choices = []) {
   let ques = q + " ";
@@ -145,16 +144,6 @@ async function ask(q = "Question?", choices = []) {
   const choice = await question(ques, { choices }).catch((e) => e);
   return choice;
 }
-
-// let answer = await ask(chalk`{magenta Yolo:}`);
-// answer = await ask(chalk`{magenta Choices:}`, [`1. Hello`, `2. Yello`]);
-// console.log({ answer });
-
-// ./secrets.mjs encrypt ./env
-// ./secrets.mjs encrypt -f ./env
-// ./secrets.mjs encrypt -e ./env
-// ./secrets.mjs decrypt ./env
-// ./secrets.mjs help
 
 function processArgs() {
   const args = process.argv.slice(3);
@@ -174,6 +163,7 @@ function processArgs() {
 }
 
 function helpCommand() {
+  printTitle();
   console.log(chalk`
 {bold.underline Usage:} {bold ./undercover.mjs} {magenta <command> [options]} <file> | <dir>
 
@@ -209,29 +199,42 @@ function helpCommand() {
 }`);
 }
 
-async function main() {
-  const { options, positional } = processArgs();
-  // console.log({ options, positional });
+function printTitle() {
   console.log(chalk`
-🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}
-  `);
+🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
+}
 
-  const command = positional[0];
+async function main() {
+  const args = processArgs();
+
+  const command = args.positional[0];
+
   switch (command) {
     case "encrypt":
+      encryptCommand(args);
       break;
     case "decrypt":
+      decryptCommand(args);
+      break;
+    case "update":
+      updateCommand();
       break;
     case "help":
-      return helpCommand();
+      helpCommand();
+      break;
     default:
-      console.error(chalk`{bold.red Error:} {red ${command ? `Unknown command ${command}`: `No command specified!`}}\n`);
-      console.error(chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`);
+      printTitle();
+      console.error(
+        chalk`\n{bold.red Error:} {red ${
+          command ? `Unknown command ${command}` : `No command specified!`
+        }}\n`
+      );
+      console.error(
+        chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`
+      );
       process.exit(-1);
   }
-  // const secretDirOrFile = positional[1] || ".";
-  // const files = await getFiles(secretDirOrFile);
-  // console.log({ files });
+  process.exit(0);
 }
 
 await main();

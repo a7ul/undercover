@@ -29,14 +29,15 @@ function isEqualStr(a, b) {
 }
 
 function detectFileType(filepath) {
-  const f = filepath.trim();
-  if (f.endsWith(ENC_ENV_EXT)) {
+  const f = path.basename(filepath);
+  const ext = path.extname(f);
+  if (ext === ENC_ENV_EXT) {
     return FILE_TYPE.ENC.ENV;
   }
-  if (f.endsWith(ENC_OTHER_EXT)) {
+  if (ext === ENC_OTHER_EXT) {
     return FILE_TYPE.ENC.OTHER;
   }
-  if (/.(env|env.*)$/g.test(f)) {
+  if (ext === ".env" || f.startsWith(".env." || f === ".env")) {
     return FILE_TYPE.REGULAR.ENV;
   }
   return FILE_TYPE.REGULAR.OTHER;
@@ -205,7 +206,12 @@ export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
   if (!previouslyEncrypted) {
     return encrypt(text, key);
   }
-  const previousText = decrypt(previouslyEncrypted, key);
+  let previousText = "";
+  try {
+    previousText = decrypt(previouslyEncrypted, key);
+  } catch (err) {
+    console.warn(err);
+  }
   if (isEqualStr(text, previousText)) {
     return previouslyEncrypted;
   } else {
@@ -216,6 +222,9 @@ export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
 async function encryptFile(srcFile, secretKey) {
   let content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const destFile = getDestFile(srcFile);
+  const previouslyEncrypted = await fs
+    .readFile(destFile.filepath, { encoding: "utf-8" })
+    .catch((err) => null);
 
   switch (srcFile.type) {
     case FILE_TYPE.REGULAR.ENV: {
@@ -231,7 +240,7 @@ async function encryptFile(srcFile, secretKey) {
       console.log(
         chalk`{bold.green Encrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
       );
-      content = encrypt(content, secretKey);
+      content = encryptOnlyIfChanged(content, previouslyEncrypted, secretKey);
       break;
     }
   }

@@ -150,16 +150,28 @@ function processArgs(args) {
 }
 
 async function showDiff(encFile, secretKey) {
-  const unencrypted = getDestFile(encFile);
+  let content = await fs.readFile(encFile.filepath, { encoding: "utf-8" });
+  if (encFile.type === FILE_TYPE.ENC.ENV) {
+    content = decryptDotEnvContent(content, secretKey).trim();
+  } else if (encFile.type === FILE_TYPE.ENC.OTHER) {
+    content = decrypt(content, secretKey).trim();
+  }
+  const originalFile = getDestFile(encFile);
   console.log(
-    chalk`{bold diff between: ${encFile.filepath} and ${unencrypted.filepath}}`
+    chalk`{bold.magenta diff between ${encFile.filepath} & ${originalFile.filepath}}`
   );
   $.verbose = false;
   const output =
-    await $`git --no-pager diff --color $(cat ./env/abc222.env | git hash-object -w --stdin) $(cat ./env/abc2.env | git hash-object -w --stdin)`;
+    await $`git --no-pager diff --color $(echo ${content} | git hash-object -w --stdin) ${originalFile.filepath}`.catch(
+      (err) => err
+    );
   $.verbose = true;
-  console.log(output.stderr);
-  console.log(output.stdout);
+  if (!output.stdout && !output.stderr) {
+    console.log(chalk`{red.bold \nNo diff\n}`);
+  } else {
+    console.log(output.stderr);
+    console.log(output.stdout);
+  }
 }
 
 // Encryption
@@ -326,8 +338,12 @@ async function decryptCommand(args) {
 async function diffCommand(args) {
   const { options, positional: fileNames } = processArgs(args);
   const files = await getFiles(fileNames);
+  const secretKey = getSecretKey("qwerty");
+
   for (const file of files) {
-    //TODO:
+    if ([FILE_TYPE.ENC.ENV, FILE_TYPE.ENC.OTHER].includes(file.type)) {
+      await showDiff(file, secretKey);
+    }
   }
 }
 
@@ -381,6 +397,14 @@ function helpCommand() {
   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
 }
   <dir>  {visible decrypt all files in this directory.}
+
+{bold.magenta diff:} {bold ./undercover.mjs} {magenta diff} <file.crypt...> | <file.ecrypt...> | <dir...>
+{visible
+  Displays the diff between the input encrypted file and the original file.
+  Useful for checking what will change in the encrypted file if you encrypt the original file now.
+}
+  <dir>  {visible show diff for all encrypted files in this directory.}
+  
 
 {bold.magenta update:} {bold ./undercover.mjs} {magenta update}
 {visible

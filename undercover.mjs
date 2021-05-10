@@ -15,6 +15,8 @@ const FILE_TYPE = {
   OTHER: "OTHER_FILE",
 };
 
+// Utlities
+
 function isEqualStr(a, b) {
   if (a.length !== b.length) {
     return false;
@@ -22,8 +24,8 @@ function isEqualStr(a, b) {
   return a.localeCompare(b) === 0;
 }
 
-function detectFileType(filename) {
-  const f = filename.trim();
+function detectFileType(filepath) {
+  const f = filepath.trim();
   if (f.endsWith(ENC_ENV_EXT)) {
     return FILE_TYPE.ENC_ENV;
   }
@@ -36,38 +38,127 @@ function detectFileType(filename) {
   return FILE_TYPE.OTHER;
 }
 
-function getDestFile(fileWithType) {
+function getDestFile(file) {
   switch (file.type) {
     case FILE_TYPE.ENC_ENV:
       return {
-        file: fileWithType.file.slice(0, -ENC_ENV_EXT.length),
+        filepath: file.filepath.slice(0, -ENC_ENV_EXT.length),
         type: FILE_TYPE.ENV,
       };
     case FILE_TYPE.ENC_OTHER:
       return {
-        file: fileWithType.file.slice(0, -ENC_OTHER_EXT.length),
+        filepath: file.filepath.slice(0, -ENC_OTHER_EXT.length),
         type: FILE_TYPE.OTHER,
       };
     case FILE_TYPE.ENV:
       return {
-        file: `${fileWithType.file}${ENC_ENV_EXT}`,
+        filepath: `${file.filepath}${ENC_ENV_EXT}`,
         type: FILE_TYPE.ENC_ENV,
       };
     case FILE_TYPE.OTHER:
       return {
-        file: `${fileWithType.file}${ENC_OTHER_EXT}`,
+        filepath: `${file.filepath}${ENC_OTHER_EXT}`,
         type: FILE_TYPE.ENC_OTHER,
       };
   }
-  throw new Error(
-    `Unsupported file type: ${fileWithType.type}: ${fileWithType.file}`
-  );
+  throw new Error(`Unsupported file type: ${file.type}: ${file.filepath}`);
 }
 
 function printTitle() {
   console.log(chalk`
 🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
 }
+
+function dotEnvFileTransformer(
+  fileContent = "",
+  processEnvLine = (key, value) => [key, value].join("=")
+) {
+  const NEW_LINE_REGEX = /\n|\r|\r\n/;
+  const content = fileContent.toString();
+  const envLines = content.split(NEW_LINE_REGEX);
+
+  const transformedLines = envLines.map((line) => {
+    const isNotEnvLine = line.includes("=") == false;
+    const isComment = line.trim().startsWith("#");
+    if (isNotEnvLine || isComment) {
+      return line;
+    }
+    const [key, ...valueParts] = line.split("=");
+    const value = valueParts.join("=");
+    return processEnvLine(key, value);
+  });
+  return transformedLines.join("\n");
+}
+
+async function getFiles(fileOrDirectoryNames) {
+  const results = [];
+  try {
+    for (const fileOrDirName of fileOrDirectoryNames) {
+      const stat = await fs.stat(fileOrDirName);
+      if (stat.isFile()) {
+        results.push(fileOrDirName);
+      } else if (stat.isDirectory()) {
+        const filesInDir = await fs.readdir(fileOrDirName);
+        await Promise.all(
+          filesInDir.map(async (f) => {
+            const filePath = path.join(fileOrDirName, f);
+            const fileStat = await fs.stat(filePath);
+            if (fileStat.isFile()) {
+              results.push(filePath);
+            }
+          })
+        );
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  return results.map((filepath) => ({
+    filepath,
+    type: detectFileType(filepath),
+  }));
+}
+
+async function ask(q = "Question?", choices = []) {
+  let ques = q + " ";
+  const allChoices = choices.join("\n");
+  if (allChoices) {
+    ques = q + "\n" + allChoices + "\n> ";
+  }
+  const choice = await question(ques, { choices }).catch((e) => e);
+  return choice;
+}
+
+function processArgs(args) {
+  const options = {};
+  const positional = [];
+
+  for (const arg of args) {
+    if (arg.startsWith("-") || arg.startsWith("--")) {
+      const [key, ...values] = arg.split("=");
+      const value = values.join("=");
+      options[key] = value || "true";
+    } else {
+      positional.push(arg);
+    }
+  }
+  return { options, positional };
+}
+
+async function showDiff(encFile, secretKey) {
+  const unencrypted = getDestFile(encFile);
+  console.log(
+    chalk`{bold diff between: ${encFile.filepath} and ${unencrypted.filepath}}`
+  );
+  $.verbose = false;
+  const output =
+    await $`git --no-pager diff --color $(cat ./env/abc222.env | git hash-object -w --stdin) $(cat ./env/abc2.env | git hash-object -w --stdin)`;
+  $.verbose = true;
+  console.log(output.stderr);
+  console.log(output.stdout);
+}
+
+// Encryption
 
 export function getSecretKey(password) {
   return crypto.createHash("sha256").update(password).digest();
@@ -106,123 +197,53 @@ export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
   }
 }
 
-function dotEnvFileTransformer(
-  fileContent = "",
-  processEnvLine = (key, value) => [key, value].join("=")
-) {
-  const NEW_LINE_REGEX = /\n|\r|\r\n/;
-  const content = fileContent.toString();
-  const envLines = content.split(NEW_LINE_REGEX);
-
-  const transformedLines = envLines.map((line) => {
-    const isNotEnvLine = line.includes("=") == false;
-    const isComment = line.trim().startsWith("#");
-    if (isNotEnvLine || isComment) {
-      return line;
-    }
-    const [key, ...valueParts] = line.split("=");
-    const value = valueParts.join("=");
-    return processEnvLine(key, value);
-  });
-  return transformedLines.join("\n");
-}
-
-async function encryptDotEnvFile(src, dest, secretKey) {
+async function encryptDotEnvFile(srcFile, destFile, secretKey) {
   console.log(
-    chalk`{bold.green Encrypting values in} {magenta ${src}} -> ${dest}`
+    chalk`{bold.green Encrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
   );
-  const content = await fs.readFile(src, { encoding: "utf-8" });
+  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const processEnvLine = (key, value) =>
     [key, encrypt(value, secretKey)].join("=");
   const encrypted = dotEnvFileTransformer(content, processEnvLine);
-  await fs.writeFile(dest, encrypted);
+  await fs.writeFile(destFile.filepath, encrypted);
 }
 
-async function decryptDotEnvFile(src, dest, secretKey) {
+async function decryptDotEnvFile(srcFile, destFile, secretKey) {
   console.log(
-    chalk`{bold.green Decrypting values in} {magenta ${src}} -> ${dest}`
+    chalk`{bold.green Decrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
   );
-  const content = await fs.readFile(src, { encoding: "utf-8" });
+  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const processEnvLine = (key, value) =>
     [key, decrypt(value, secretKey)].join("=");
   const decrypted = dotEnvFileTransformer(content, processEnvLine);
-  await fs.writeFile(dest, decrypted);
+  await fs.writeFile(destFile.filepath, decrypted);
 }
 
-async function encryptEntireFile(src, dest, secretKey) {
-  console.log(chalk`{bold.green Encrypting file} {magenta ${src}} -> ${dest}`);
-  const content = await fs.readFile(src, { encoding: "utf-8" });
+async function encryptEntireFile(srcFile, destFile, secretKey) {
+  console.log(
+    chalk`{bold.green Encrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+  );
+  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const encrypted = encrypt(content, secretKey);
-  await fs.writeFile(dest, encrypted);
+  await fs.writeFile(destFile.filepath, encrypted);
 }
 
-async function decryptEntireFile(src, dest, secretKey) {
-  console.log(chalk`{bold.green Decrypting file} {magenta ${src}} -> ${dest}`);
-  const content = await fs.readFile(src, { encoding: "utf-8" });
+async function decryptEntireFile(srcFile, destFile, secretKey) {
+  console.log(
+    chalk`{bold.green Decrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+  );
+  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const decrypted = decrypt(content, secretKey);
-  await fs.writeFile(dest, decrypted);
+  await fs.writeFile(destFile.filepath, decrypted);
 }
 
-async function getFiles(filesOrDirectories) {
-  const results = [];
-  try {
-    for (const fileOrDir of filesOrDirectories) {
-      const stat = await fs.stat(fileOrDir);
-      if (stat.isFile()) {
-        results.push(fileOrDir);
-      } else if (stat.isDirectory()) {
-        const filesInDir = await fs.readdir(fileOrDir);
-        await Promise.all(
-          filesInDir.map(async (f) => {
-            const filePath = path.join(fileOrDir, f);
-            const fileStat = await fs.stat(filePath);
-            if (fileStat.isFile()) {
-              results.push(filePath);
-            }
-          })
-        );
-      }
-    }
-  } catch (err) {
-    console.error(err);
-  }
-  return results.map((file) => ({
-    file,
-    type: detectFileType(file),
-  }));
-}
-
-async function ask(q = "Question?", choices = []) {
-  let ques = q + " ";
-  const allChoices = choices.join("\n");
-  if (allChoices) {
-    ques = q + "\n" + allChoices + "\n> ";
-  }
-  const choice = await question(ques, { choices }).catch((e) => e);
-  return choice;
-}
-
-function processArgs(args) {
-  const options = {};
-  const positional = [];
-
-  for (const arg of args) {
-    if (arg.startsWith("-") || arg.startsWith("--")) {
-      const [key, ...values] = arg.split("=");
-      const value = values.join("=");
-      options[key] = value || "true";
-    } else {
-      positional.push(arg);
-    }
-  }
-  return { options, positional };
-}
+// Commands
 
 async function encryptCommand(args) {
-  const { options, positional: inputFiles } = processArgs(args);
-  const filesWithType = await getFiles(inputFiles);
+  const { options, positional: inputFileNames } = processArgs(args);
+  const files = await getFiles(inputFileNames);
 
-  let filesToEncrypt = filesWithType.filter((f) =>
+  let filesToEncrypt = files.filter((f) =>
     [FILE_TYPE.ENV, FILE_TYPE.OTHER].includes(f.type)
   );
 
@@ -243,14 +264,14 @@ async function encryptCommand(args) {
   const secretKey = getSecretKey(password);
 
   for (const fileToEncrypt of filesToEncrypt) {
-    const dest = getDestFile(fileToEncrypt);
+    const destFile = getDestFile(fileToEncrypt);
     switch (fileToEncrypt.type) {
       case FILE_TYPE.ENV: {
-        await encryptDotEnvFile(fileToEncrypt.file, dest.file, secretKey);
+        await encryptDotEnvFile(fileToEncrypt, destFile, secretKey);
         break;
       }
       case FILE_TYPE.OTHER: {
-        await encryptEntireFile(fileToEncrypt.file, dest.file, secretKey);
+        await encryptEntireFile(fileToEncrypt, destFile, secretKey);
         break;
       }
     }
@@ -261,9 +282,9 @@ async function encryptCommand(args) {
 
 async function decryptCommand(args) {
   const { options, positional: inputFiles } = processArgs(args);
-  const filesWithType = await getFiles(inputFiles);
+  const files = await getFiles(inputFiles);
 
-  let filesToDecrypt = filesWithType.filter((f) =>
+  let filesToDecrypt = files.filter((f) =>
     [FILE_TYPE.ENC_OTHER, FILE_TYPE.ENC_ENV].includes(f.type)
   );
 
@@ -275,14 +296,14 @@ async function decryptCommand(args) {
   const secretKey = getSecretKey(password);
 
   for (const fileToDecrypt of filesToDecrypt) {
-    const dest = getDestFile(fileToEncrypt);
+    const destFile = getDestFile(fileToDecrypt);
     switch (fileToDecrypt.type) {
       case FILE_TYPE.ENC_ENV: {
-        await decryptDotEnvFile(fileToDecrypt.file, dest.file, secretKey);
+        await decryptDotEnvFile(fileToDecrypt, destFile, secretKey);
         break;
       }
       case FILE_TYPE.ENC_OTHER: {
-        await decryptEntireFile(fileToDecrypt.file, dest.file, secretKey);
+        await decryptEntireFile(fileToDecrypt, destFile, secretKey);
         break;
       }
     }
@@ -291,26 +312,13 @@ async function decryptCommand(args) {
   console.log(chalk`{green.bold All files decrypted successfully} 🔐`);
 }
 
-async function showDiff(encFile, secretKey) {
-  const unencrypted = getDestFile(encFile);
-  console.log(
-    chalk`{bold diff between: ${encFile.file} and ${unencrypted.file}}`
-  );
-  const output = await $`git --no-pager diff --color $(cat ./env/abc222.env | git hash-object -w --stdin) $(cat ./env/abc2.env | git hash-object -w --stdin)`;
-  console.log(output.stderr);
-  console.log(output.stdout);
-}
-
 async function diffCommand(args) {
-  $.verbose = false;
-  const { options, positional: inputFiles } = processArgs(args);
-  const filesWithType = await getFiles(inputFiles);
+  const { options, positional: fileNames } = processArgs(args);
+  const files = await getFiles(fileNames);
 
-  for (const file of filesWithType) {
+  for (const file of files) {
     //TODO:
   }
-
-  $.verbose = true;
 }
 
 async function updateCommand() {
@@ -382,6 +390,8 @@ function unknownCommand(command) {
   console.error(chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`);
   process.exit(-1);
 }
+
+// Main
 
 async function main() {
   const [command, ...args] = process.argv.slice(3);

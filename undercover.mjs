@@ -2,16 +2,66 @@
 
 import crypto from "crypto";
 import path from "path";
+import { $ } from "zx";
 
 const ENCRYPTION_DELIMITER = ".";
-const ENC_DOT_ENV_EXT = ".ecrypt";
+const ENC_ENV_EXT = ".ecrypt";
 const ENC_OTHER_EXT = ".crypt";
+
+const FILE_TYPE = {
+  ENC_ENV: "ENCRYPTED_ENV_FILE",
+  ENC_OTHER: "ENCRYPTED_OTHER_FILE",
+  ENV: "ENV_FILE",
+  OTHER: "OTHER_FILE",
+};
 
 function isEqualStr(a, b) {
   if (a.length !== b.length) {
     return false;
   }
   return a.localeCompare(b) === 0;
+}
+
+function detectFileType(filename) {
+  const f = filename.trim();
+  if (f.endsWith(ENC_ENV_EXT)) {
+    return FILE_TYPE.ENC_ENV;
+  }
+  if (f.endsWith(ENC_OTHER_EXT)) {
+    return FILE_TYPE.ENC_OTHER;
+  }
+  if (/.(env|env.*)$/g.test(f)) {
+    return FILE_TYPE.ENV;
+  }
+  return FILE_TYPE.OTHER;
+}
+
+function getDestFile(fileWithType) {
+  switch (file.type) {
+    case FILE_TYPE.ENC_ENV:
+      return {
+        file: fileWithType.file.slice(0, -ENC_ENV_EXT.length),
+        type: FILE_TYPE.ENV,
+      };
+    case FILE_TYPE.ENC_OTHER:
+      return {
+        file: fileWithType.file.slice(0, -ENC_OTHER_EXT.length),
+        type: FILE_TYPE.OTHER,
+      };
+    case FILE_TYPE.ENV:
+      return {
+        file: `${fileWithType.file}${ENC_ENV_EXT}`,
+        type: FILE_TYPE.ENC_ENV,
+      };
+    case FILE_TYPE.OTHER:
+      return {
+        file: `${fileWithType.file}${ENC_OTHER_EXT}`,
+        type: FILE_TYPE.ENC_OTHER,
+      };
+  }
+  throw new Error(
+    `Unsupported file type: ${fileWithType.type}: ${fileWithType.file}`
+  );
 }
 
 function printTitle() {
@@ -77,8 +127,7 @@ function dotEnvFileTransformer(
   return transformedLines.join("\n");
 }
 
-async function encryptDotEnvFile(src, secretKey) {
-  const dest = `${src}${ENC_DOT_ENV_EXT}`;
+async function encryptDotEnvFile(src, dest, secretKey) {
   console.log(
     chalk`{bold.green Encrypting values in} {magenta ${src}} -> ${dest}`
   );
@@ -89,8 +138,7 @@ async function encryptDotEnvFile(src, secretKey) {
   await fs.writeFile(dest, encrypted);
 }
 
-async function decryptDotEnvFile(src, secretKey) {
-  const dest = src.slice(0, -ENC_DOT_ENV_EXT.length);
+async function decryptDotEnvFile(src, dest, secretKey) {
   console.log(
     chalk`{bold.green Decrypting values in} {magenta ${src}} -> ${dest}`
   );
@@ -101,34 +149,18 @@ async function decryptDotEnvFile(src, secretKey) {
   await fs.writeFile(dest, decrypted);
 }
 
-async function encryptEntireFile(src, secretKey) {
-  const dest = `${src}${ENC_OTHER_EXT}`;
+async function encryptEntireFile(src, dest, secretKey) {
   console.log(chalk`{bold.green Encrypting file} {magenta ${src}} -> ${dest}`);
   const content = await fs.readFile(src, { encoding: "utf-8" });
   const encrypted = encrypt(content, secretKey);
   await fs.writeFile(dest, encrypted);
 }
 
-async function decryptEntireFile(src, secretKey) {
-  const dest = src.slice(0, -ENC_OTHER_EXT.length);
+async function decryptEntireFile(src, dest, secretKey) {
   console.log(chalk`{bold.green Decrypting file} {magenta ${src}} -> ${dest}`);
   const content = await fs.readFile(src, { encoding: "utf-8" });
   const decrypted = decrypt(content, secretKey);
   await fs.writeFile(dest, decrypted);
-}
-
-function detectFileType(filename) {
-  const f = filename.trim();
-  if (f.endsWith(ENC_DOT_ENV_EXT)) {
-    return "ENCRYPTED_ENV_FILE";
-  }
-  if (f.endsWith(ENC_OTHER_EXT)) {
-    return "ENCRYPTED_OTHER_FILE";
-  }
-  if (/.(env|env.*)$/g.test(f)) {
-    return "ENV_FILE";
-  }
-  return "OTHER_FILE";
 }
 
 async function getFiles(filesOrDirectories) {
@@ -153,9 +185,11 @@ async function getFiles(filesOrDirectories) {
     }
   } catch (err) {
     console.error(err);
-  } finally {
-    return results;
   }
+  return results.map((file) => ({
+    file,
+    type: detectFileType(file),
+  }));
 }
 
 async function ask(q = "Question?", choices = []) {
@@ -186,21 +220,19 @@ function processArgs(args) {
 
 async function encryptCommand(args) {
   const { options, positional: inputFiles } = processArgs(args);
-  const files = await getFiles(inputFiles);
-
-  const filesWithType = files.map((file) => ({
-    file,
-    type: detectFileType(file),
-  }));
+  const filesWithType = await getFiles(inputFiles);
 
   let filesToEncrypt = filesWithType.filter((f) =>
-    ["ENV_FILE", "OTHER_FILE"].includes(f.type)
+    [FILE_TYPE.ENV, FILE_TYPE.OTHER].includes(f.type)
   );
 
   if (options["-f"] === "true") {
-    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: "OTHER_FILE" }));
+    filesToEncrypt = filesToEncrypt.map((f) => ({
+      ...f,
+      type: FILE_TYPE.OTHER,
+    }));
   } else if (options["-e"] === "true") {
-    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: "ENV_FILE" }));
+    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: FILE_TYPE.ENV }));
   }
 
   if (filesToEncrypt.length === 0) {
@@ -211,13 +243,14 @@ async function encryptCommand(args) {
   const secretKey = getSecretKey(password);
 
   for (const fileToEncrypt of filesToEncrypt) {
+    const dest = getDestFile(fileToEncrypt);
     switch (fileToEncrypt.type) {
-      case "ENV_FILE": {
-        await encryptDotEnvFile(fileToEncrypt.file, secretKey);
+      case FILE_TYPE.ENV: {
+        await encryptDotEnvFile(fileToEncrypt.file, dest.file, secretKey);
         break;
       }
-      case "OTHER_FILE": {
-        await encryptEntireFile(fileToEncrypt.file, secretKey);
+      case FILE_TYPE.OTHER: {
+        await encryptEntireFile(fileToEncrypt.file, dest.file, secretKey);
         break;
       }
     }
@@ -228,15 +261,10 @@ async function encryptCommand(args) {
 
 async function decryptCommand(args) {
   const { options, positional: inputFiles } = processArgs(args);
-  const files = await getFiles(inputFiles);
-
-  const filesWithType = files.map((file) => ({
-    file,
-    type: detectFileType(file),
-  }));
+  const filesWithType = await getFiles(inputFiles);
 
   let filesToDecrypt = filesWithType.filter((f) =>
-    ["ENCRYPTED_OTHER_FILE", "ENCRYPTED_ENV_FILE"].includes(f.type)
+    [FILE_TYPE.ENC_OTHER, FILE_TYPE.ENC_ENV].includes(f.type)
   );
 
   if (filesToDecrypt.length === 0) {
@@ -247,19 +275,42 @@ async function decryptCommand(args) {
   const secretKey = getSecretKey(password);
 
   for (const fileToDecrypt of filesToDecrypt) {
+    const dest = getDestFile(fileToEncrypt);
     switch (fileToDecrypt.type) {
-      case "ENCRYPTED_ENV_FILE": {
-        await decryptDotEnvFile(fileToDecrypt.file, secretKey);
+      case FILE_TYPE.ENC_ENV: {
+        await decryptDotEnvFile(fileToDecrypt.file, dest.file, secretKey);
         break;
       }
-      case "ENCRYPTED_OTHER_FILE": {
-        await decryptEntireFile(fileToDecrypt.file, secretKey);
+      case FILE_TYPE.ENC_OTHER: {
+        await decryptEntireFile(fileToDecrypt.file, dest.file, secretKey);
         break;
       }
     }
   }
 
   console.log(chalk`{green.bold All files decrypted successfully} 🔐`);
+}
+
+async function showDiff(encFile, secretKey) {
+  const unencrypted = getDestFile(encFile);
+  console.log(
+    chalk`{bold diff between: ${encFile.file} and ${unencrypted.file}}`
+  );
+  const output = await $`git --no-pager diff --color $(cat ./env/abc222.env | git hash-object -w --stdin) $(cat ./env/abc2.env | git hash-object -w --stdin)`;
+  console.log(output.stderr);
+  console.log(output.stdout);
+}
+
+async function diffCommand(args) {
+  $.verbose = false;
+  const { options, positional: inputFiles } = processArgs(args);
+  const filesWithType = await getFiles(inputFiles);
+
+  for (const file of filesWithType) {
+    //TODO:
+  }
+
+  $.verbose = true;
 }
 
 async function updateCommand() {
@@ -341,6 +392,9 @@ async function main() {
       break;
     case "decrypt":
       await decryptCommand(args);
+      break;
+    case "diff":
+      await diffCommand(args);
       break;
     case "update":
       await updateCommand();

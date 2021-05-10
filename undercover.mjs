@@ -9,10 +9,14 @@ const ENC_ENV_EXT = ".ecrypt";
 const ENC_OTHER_EXT = ".crypt";
 
 const FILE_TYPE = {
-  ENC_ENV: "ENCRYPTED_ENV_FILE",
-  ENC_OTHER: "ENCRYPTED_OTHER_FILE",
-  ENV: "ENV_FILE",
-  OTHER: "OTHER_FILE",
+  ENC: {
+    ENV: "ENCRYPTED_ENV_FILE",
+    OTHER: "ENCRYPTED_OTHER_FILE",
+  },
+  REGULAR: {
+    ENV: "REGULAR_ENV_FILE",
+    OTHER: "REGULAR_OTHER_FILE",
+  },
 };
 
 // Utlities
@@ -27,38 +31,38 @@ function isEqualStr(a, b) {
 function detectFileType(filepath) {
   const f = filepath.trim();
   if (f.endsWith(ENC_ENV_EXT)) {
-    return FILE_TYPE.ENC_ENV;
+    return FILE_TYPE.ENC.ENV;
   }
   if (f.endsWith(ENC_OTHER_EXT)) {
-    return FILE_TYPE.ENC_OTHER;
+    return FILE_TYPE.ENC.OTHER;
   }
   if (/.(env|env.*)$/g.test(f)) {
-    return FILE_TYPE.ENV;
+    return FILE_TYPE.REGULAR.ENV;
   }
-  return FILE_TYPE.OTHER;
+  return FILE_TYPE.REGULAR.OTHER;
 }
 
 function getDestFile(file) {
   switch (file.type) {
-    case FILE_TYPE.ENC_ENV:
+    case FILE_TYPE.ENC.ENV:
       return {
         filepath: file.filepath.slice(0, -ENC_ENV_EXT.length),
-        type: FILE_TYPE.ENV,
+        type: FILE_TYPE.REGULAR.ENV,
       };
-    case FILE_TYPE.ENC_OTHER:
+    case FILE_TYPE.ENC.OTHER:
       return {
         filepath: file.filepath.slice(0, -ENC_OTHER_EXT.length),
-        type: FILE_TYPE.OTHER,
+        type: FILE_TYPE.REGULAR.OTHER,
       };
-    case FILE_TYPE.ENV:
+    case FILE_TYPE.REGULAR.ENV:
       return {
         filepath: `${file.filepath}${ENC_ENV_EXT}`,
-        type: FILE_TYPE.ENC_ENV,
+        type: FILE_TYPE.ENC.ENV,
       };
-    case FILE_TYPE.OTHER:
+    case FILE_TYPE.REGULAR.OTHER:
       return {
         filepath: `${file.filepath}${ENC_OTHER_EXT}`,
-        type: FILE_TYPE.ENC_OTHER,
+        type: FILE_TYPE.ENC.OTHER,
       };
   }
   throw new Error(`Unsupported file type: ${file.type}: ${file.filepath}`);
@@ -244,16 +248,19 @@ async function encryptCommand(args) {
   const files = await getFiles(inputFileNames);
 
   let filesToEncrypt = files.filter((f) =>
-    [FILE_TYPE.ENV, FILE_TYPE.OTHER].includes(f.type)
+    [FILE_TYPE.REGULAR.ENV, FILE_TYPE.REGULAR.OTHER].includes(f.type)
   );
 
   if (options["-f"] === "true") {
     filesToEncrypt = filesToEncrypt.map((f) => ({
       ...f,
-      type: FILE_TYPE.OTHER,
+      type: FILE_TYPE.REGULAR.OTHER,
     }));
   } else if (options["-e"] === "true") {
-    filesToEncrypt = filesToEncrypt.map((f) => ({ ...f, type: FILE_TYPE.ENV }));
+    filesToEncrypt = filesToEncrypt.map((f) => ({
+      ...f,
+      type: FILE_TYPE.REGULAR.ENV,
+    }));
   }
 
   if (filesToEncrypt.length === 0) {
@@ -266,11 +273,11 @@ async function encryptCommand(args) {
   for (const fileToEncrypt of filesToEncrypt) {
     const destFile = getDestFile(fileToEncrypt);
     switch (fileToEncrypt.type) {
-      case FILE_TYPE.ENV: {
+      case FILE_TYPE.REGULAR.ENV: {
         await encryptDotEnvFile(fileToEncrypt, destFile, secretKey);
         break;
       }
-      case FILE_TYPE.OTHER: {
+      case FILE_TYPE.REGULAR.OTHER: {
         await encryptEntireFile(fileToEncrypt, destFile, secretKey);
         break;
       }
@@ -285,7 +292,7 @@ async function decryptCommand(args) {
   const files = await getFiles(inputFiles);
 
   let filesToDecrypt = files.filter((f) =>
-    [FILE_TYPE.ENC_OTHER, FILE_TYPE.ENC_ENV].includes(f.type)
+    [FILE_TYPE.ENC.OTHER, FILE_TYPE.ENC.ENV].includes(f.type)
   );
 
   if (filesToDecrypt.length === 0) {
@@ -298,11 +305,11 @@ async function decryptCommand(args) {
   for (const fileToDecrypt of filesToDecrypt) {
     const destFile = getDestFile(fileToDecrypt);
     switch (fileToDecrypt.type) {
-      case FILE_TYPE.ENC_ENV: {
+      case FILE_TYPE.ENC.ENV: {
         await decryptDotEnvFile(fileToDecrypt, destFile, secretKey);
         break;
       }
-      case FILE_TYPE.ENC_OTHER: {
+      case FILE_TYPE.ENC.OTHER: {
         await decryptEntireFile(fileToDecrypt, destFile, secretKey);
         break;
       }
@@ -315,7 +322,6 @@ async function decryptCommand(args) {
 async function diffCommand(args) {
   const { options, positional: fileNames } = processArgs(args);
   const files = await getFiles(fileNames);
-
   for (const file of files) {
     //TODO:
   }
@@ -331,11 +337,14 @@ async function updateCommand() {
   }
   const UPDATE_URL =
     "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs";
-  const currentFile = import.meta.url.replace("file://", "");
+  const currentFilePath = import.meta.url.replace("file://", "");
   const resp = await fetch(UPDATE_URL);
   if (resp.ok) {
     const script = await resp.text();
-    await fs.writeFile(currentFile, script, { encoding: "utf8", flag: "w" });
+    await fs.writeFile(currentFilePath, script, {
+      encoding: "utf8",
+      flag: "w",
+    });
     chalk.green("Updated successfully! 🚀");
   } else {
     console.error(chalk`{red.bold Failed to update!}`, await resp.text());

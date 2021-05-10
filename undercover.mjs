@@ -233,6 +233,20 @@ async function encryptEntireFile(srcFile, destFile, secretKey) {
   await fs.writeFile(destFile.filepath, encrypted);
 }
 
+async function encryptFile(fileToEncrypt, secretKey) {
+  const destFile = getDestFile(fileToEncrypt);
+  switch (fileToEncrypt.type) {
+    case FILE_TYPE.REGULAR.ENV: {
+      await encryptDotEnvFile(fileToEncrypt, destFile, secretKey);
+      break;
+    }
+    case FILE_TYPE.REGULAR.OTHER: {
+      await encryptEntireFile(fileToEncrypt, destFile, secretKey);
+      break;
+    }
+  }
+}
+
 function decryptDotEnvContent(content, secretKey) {
   const processEnvLine = (key, value) =>
     [key, decrypt(value, secretKey)].join("=");
@@ -287,17 +301,7 @@ async function encryptCommand(args) {
   const secretKey = getSecretKey(password);
 
   for (const fileToEncrypt of filesToEncrypt) {
-    const destFile = getDestFile(fileToEncrypt);
-    switch (fileToEncrypt.type) {
-      case FILE_TYPE.REGULAR.ENV: {
-        await encryptDotEnvFile(fileToEncrypt, destFile, secretKey);
-        break;
-      }
-      case FILE_TYPE.REGULAR.OTHER: {
-        await encryptEntireFile(fileToEncrypt, destFile, secretKey);
-        break;
-      }
-    }
+    await encryptFile(fileToEncrypt, secretKey);
   }
 
   console.log(chalk`{green.bold All files encrypted successfully} 🔐`);
@@ -338,7 +342,13 @@ async function decryptCommand(args) {
 async function diffCommand(args) {
   const { options, positional: fileNames } = processArgs(args);
   const files = await getFiles(fileNames);
-  const secretKey = getSecretKey("qwerty");
+
+  if (files.length === 0) {
+    return console.log(chalk`{red.bold No files found to diff}`);
+  }
+
+  const password = await ask(chalk`{bold Enter password}`);
+  const secretKey = getSecretKey(password);
 
   for (const file of files) {
     if ([FILE_TYPE.ENC.ENV, FILE_TYPE.ENC.OTHER].includes(file.type)) {

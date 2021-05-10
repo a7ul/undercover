@@ -212,17 +212,6 @@ async function encryptDotEnvFile(srcFile, destFile, secretKey) {
   await fs.writeFile(destFile.filepath, encrypted);
 }
 
-async function decryptDotEnvFile(srcFile, destFile, secretKey) {
-  console.log(
-    chalk`{bold.green Decrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
-  );
-  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
-  const processEnvLine = (key, value) =>
-    [key, decrypt(value, secretKey)].join("=");
-  const decrypted = dotEnvFileTransformer(content, processEnvLine);
-  await fs.writeFile(destFile.filepath, decrypted);
-}
-
 async function encryptEntireFile(srcFile, destFile, secretKey) {
   console.log(
     chalk`{bold.green Encrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
@@ -230,6 +219,21 @@ async function encryptEntireFile(srcFile, destFile, secretKey) {
   const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const encrypted = encrypt(content, secretKey);
   await fs.writeFile(destFile.filepath, encrypted);
+}
+
+function decryptDotEnvContent(content, secretKey) {
+  const processEnvLine = (key, value) =>
+    [key, decrypt(value, secretKey)].join("=");
+  return dotEnvFileTransformer(content, processEnvLine);
+}
+
+async function decryptDotEnvFile(srcFile, destFile, secretKey) {
+  console.log(
+    chalk`{bold.green Decrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+  );
+  const content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
+  const decrypted = decryptDotEnvContent(content, secretKey);
+  await fs.writeFile(destFile.filepath, decrypted);
 }
 
 async function decryptEntireFile(srcFile, destFile, secretKey) {

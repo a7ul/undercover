@@ -74,6 +74,18 @@ function printTitle() {
 🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
 }
 
+class OrderedKeyVal {
+  store = {};
+  set(key, val) {
+    this.store[key] = this.store[key] ?? [];
+    this.store[key].push(val);
+  }
+  get(key) {
+    this.store[key] = this.store[key] ?? [];
+    return this.store[key].shift();
+  }
+}
+
 function dotEnvFileTransformer(
   fileContent = "",
   processEnvLine = (key, value) => [key, value].join("=")
@@ -202,7 +214,7 @@ export function decrypt(encrypted, key) {
   return decrypted.toString();
 }
 
-export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
+export function encryptIfChanged(text, previouslyEncrypted, key) {
   if (!previouslyEncrypted) {
     return encrypt(text, key);
   }
@@ -222,7 +234,7 @@ export function encryptOnlyIfChanged(text, previouslyEncrypted, key) {
 async function encryptFile(srcFile, secretKey) {
   let content = await fs.readFile(srcFile.filepath, { encoding: "utf-8" });
   const destFile = getDestFile(srcFile);
-  const previouslyEncrypted = await fs
+  const existingEncrypted = await fs
     .readFile(destFile.filepath, { encoding: "utf-8" })
     .catch((err) => null);
 
@@ -231,8 +243,14 @@ async function encryptFile(srcFile, secretKey) {
       console.log(
         chalk`{bold.green Encrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
       );
-      const processEnvLine = (key, value) =>
-        [key, encrypt(value, secretKey)].join("=");
+      const existingKeyVal = new OrderedKeyVal();
+      if (existingEncrypted) {
+        dotEnvFileTransformer(existingEncrypted, (k, v) => {
+          existingKeyVal.set(k, v);
+        });
+      }
+      const processEnvLine = (k, v) =>
+        [k, encryptIfChanged(v, existingKeyVal.get(k), secretKey)].join("=");
       content = dotEnvFileTransformer(content, processEnvLine);
       break;
     }
@@ -240,7 +258,7 @@ async function encryptFile(srcFile, secretKey) {
       console.log(
         chalk`{bold.green Encrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
       );
-      content = encryptOnlyIfChanged(content, previouslyEncrypted, secretKey);
+      content = encryptIfChanged(content, existingEncrypted, secretKey);
       break;
     }
   }
@@ -339,17 +357,19 @@ async function diffCommand(args) {
   const { options, positional: fileNames } = processArgs(args);
   const files = await getFiles(fileNames);
 
-  if (files.length === 0) {
+  let filesToDiff = files.filter((f) =>
+    [FILE_TYPE.ENC.OTHER, FILE_TYPE.ENC.ENV].includes(f.type)
+  );
+
+  if (filesToDiff.length === 0) {
     return console.log(chalk`{red.bold No files found to diff}`);
   }
 
   const password = await ask(chalk`{bold Enter password}`);
   const secretKey = getSecretKey(password);
 
-  for (const file of files) {
-    if ([FILE_TYPE.ENC.ENV, FILE_TYPE.ENC.OTHER].includes(file.type)) {
-      await showDiff(file, secretKey);
-    }
+  for (const file of filesToDiff) {
+    await showDiff(file, secretKey);
   }
 }
 

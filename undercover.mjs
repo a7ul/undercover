@@ -404,7 +404,7 @@ function helpCommand() {
 
 {bold.underline Command:}
 
-{bold.magenta encrypt:} {bold ./undercover.mjs} {magenta encrypt [-f | -e]} <file...> | <dir...>
+{bold.magenta encrypt:} {bold undercover.mjs} {magenta encrypt [-f | -e]} <file...> | <dir...>
 {visible
   Encrypts the file using a secret. 
   If the file is detected as a dot env file, then only the values are encrypted and keys are left in plain text. 
@@ -416,14 +416,14 @@ function helpCommand() {
   -f     {visible force encrypt entire file.}
   -e     {visible force encrypt a file as if it was an env file. Encrypt only the values.}
  
-{bold.magenta decrypt:} {bold ./undercover.mjs} {magenta decrypt} <file.crypt...> | <file.ecrypt...> | <dir...>
+{bold.magenta decrypt:} {bold undercover.mjs} {magenta decrypt} <file.crypt...> | <file.ecrypt...> | <dir...>
 {visible
   Decrypts the file using the secret provided in the prompt.
   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
 }
   <dir>  {visible decrypt all files in this directory.}
 
-{bold.magenta diff:} {bold ./undercover.mjs} {magenta diff} <file.crypt...> | <file.ecrypt...> | <dir...>
+{bold.magenta diff:} {bold undercover.mjs} {magenta diff} <file.crypt...> | <file.ecrypt...> | <dir...>
 {visible
   Displays the diff between the input encrypted file and the original file.
   Useful for checking what will change in the encrypted file if you encrypt the original file now.
@@ -431,12 +431,12 @@ function helpCommand() {
   <dir>  {visible show diff for all encrypted files in this directory.}
   
 
-{bold.magenta update:} {bold ./undercover.mjs} {magenta update}
+{bold.magenta update:} {bold undercover.mjs} {magenta update}
 {visible
   Update this script to latest available version.
 }  
 
-{bold.magenta help:} {bold ./undercover.mjs} {magenta help}
+{bold.magenta help:} {bold undercover.mjs} {magenta help}
 {visible
   Show this help text.
 }`);
@@ -449,7 +449,7 @@ function unknownCommand(command) {
       command ? `Unknown command: ${command}!` : `No command specified!`
     }}\n`
   );
-  console.error(chalk`For help: {bold ./undercover.mjs} {bold.magenta help}`);
+  console.error(chalk`For help: {bold undercover.mjs} {bold.magenta help}`);
   process.exit(-1);
 }
 

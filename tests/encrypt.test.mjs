@@ -5,7 +5,7 @@ import {
   encrypt,
   decrypt,
   getSecretKey,
-  encryptOnlyIfChanged,
+  encryptIfChanged,
 } from "../undercover.mjs";
 
 const secretKey = getSecretKey("qwerty");
@@ -32,8 +32,8 @@ test("dont encrypt if not changed", () => {
     Hello 
     World
     `;
-  const previouslyEncrypted = encryptOnlyIfChanged(text, "", secretKey);
-  const encrypted = encryptOnlyIfChanged(text, previouslyEncrypted, secretKey);
+  const previouslyEncrypted = encryptIfChanged(text, "", secretKey);
+  const encrypted = encryptIfChanged(text, previouslyEncrypted, secretKey);
   assert.strictEqual(previouslyEncrypted, encrypted);
 });
 
@@ -42,9 +42,9 @@ test("encrypt if changed", () => {
     Hello 
     World
     `;
-  const previouslyEncrypted = encryptOnlyIfChanged(text, "", secretKey);
+  const previouslyEncrypted = encryptIfChanged(text, "", secretKey);
   text += " ";
-  const encrypted = encryptOnlyIfChanged(text, previouslyEncrypted, secretKey);
+  const encrypted = encryptIfChanged(text, previouslyEncrypted, secretKey);
   assert.ok(previouslyEncrypted.localeCompare(encrypted) !== 0);
   assert.strictEqual(decrypt(encrypted, secretKey), text);
 });

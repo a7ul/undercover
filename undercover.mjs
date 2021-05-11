@@ -1,5 +1,11 @@
 #!/usr/bin/env zx
 
+// :=================================:
+// : ./undercover.mjs                :
+// : Author: Atul <github.com/a7ul>  :
+// : License: MIT                    :
+// :=================================:
+
 import crypto from "crypto";
 import path from "path";
 

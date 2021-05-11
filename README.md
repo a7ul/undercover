@@ -12,7 +12,7 @@ npx zx https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs hel
 
 ## Installation
 
-You can use undercover without installing.
+You can use undercover by just copying it and commiting it in your repo.
 
 ```
 curl https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs > undercover.mjs
@@ -29,6 +29,12 @@ chmod a+x ./undercover.mjs
 ```
 
 It is recommended you commit undercover.mjs with your repo, so its easier to run whenever you want to decrypt or encrypt secrets.
+
+Further updates can be pulled by just doing:
+
+```sh
+./undercover.mjs update
+```
 
 ## Features
 

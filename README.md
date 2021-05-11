@@ -1,14 +1,21 @@
-# 🕵️ Undercover:
+# 🕵️ Undercover
 
 Store your environment variables and secrets in git safely.
 
-# Quick use (no install)
+## Features
+
+- First class `.env` files support. Only the values are encrypted and keys are left in plain text. This makes it easy to see changes in the git diff.
+- Encrypt/Decrypt entire files. Useful for things like service accounts, ssh keys.
+- Diff against encrypted file. Displays the diff between the encrypted file and the original file.
+- Easily update this script using the update command.
+
+## Quick use (no install)
 
 ```
 npx zx https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs help
 ```
 
-# Installation
+## Installation
 
 You can use undercover without installing.
 
@@ -26,7 +33,7 @@ chmod a+x ./undercover.mjs
 ./undercover.mjs
 ```
 
-# Development
+## Development
 
 Run tests: `NODE_ENV=test zx ./tests/run.mjs`
 

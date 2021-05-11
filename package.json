@@ -1,11 +1,12 @@
 {
   "name": "undercover-cli",
   "version": "1.0.0",
-  "description": "Thanks to",
-  "main": "index.js",
+  "description": "Encrypt your secrets in git safely.",
+  "main": "undercover.mjs",
   "directories": {
     "test": "tests"
   },
+  "type": "module",
   "bin": {
     "undercover": "./undercover.mjs"
   },
@@ -17,8 +18,8 @@
     "type": "git",
     "url": "git+https://github.com/a7ul/undercover.git"
   },
-  "author": "a7ul",
-  "license": "ISC",
+  "author": "Atul R <atulanand94@gmail.com>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/a7ul/undercover/issues"
   },

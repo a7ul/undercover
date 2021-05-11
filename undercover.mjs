@@ -2,7 +2,6 @@
 
 import crypto from "crypto";
 import path from "path";
-import { $ } from "zx";
 
 const ENCRYPTION_DELIMITER = ".";
 const ENC_ENV_EXT = ".ecrypt";

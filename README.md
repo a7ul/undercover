@@ -10,6 +10,10 @@ You can use undercover without installing.
 npx zx https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs
 ```
 
+# Development
+
+Run tests: `NODE_ENV=test zx ./tests/run.mjs`
+
 ## References
 
 - https://github.com/motdotla/dotenv/blob/master/lib/main.js

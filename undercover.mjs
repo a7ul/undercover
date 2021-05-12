@@ -7,6 +7,7 @@
 // :=================================:
 
 import crypto from "crypto";
+import readline from "readline";
 import path from "path";
 
 const ENCRYPTION_DELIMITER = ".";
@@ -149,6 +150,24 @@ async function ask(q = "Question?", choices = []) {
   }
   const choice = await question(ques, { choices }).catch((e) => e);
   return choice;
+}
+async function askPassword() {
+  const { stdin, stdout } = process;
+  const rl = readline.createInterface({ input: stdin, output: stdout });
+  rl.input.on("keypress", function (c, k) {
+    const len = rl.line.length;
+    readline.moveCursor(rl.output, -len, 0);
+    readline.clearLine(rl.output, 1);
+    for (var i = 0; i < len; i++) {
+      rl.output.write("*");
+    }
+  });
+  return new Promise((resolve) => {
+    rl.question(chalk`{bold Enter password}\n> `, function (password) {
+      resolve(password);
+      rl.close();
+    });
+  });
 }
 
 function processArgs(args) {
@@ -326,7 +345,7 @@ async function encryptCommand(args) {
     return console.log(chalk`{red.bold No files found to encrypt}`);
   }
 
-  const password = await ask(chalk`{bold Enter password}`);
+  const password = await askPassword();
   const secretKey = getSecretKey(password);
 
   for (const fileToEncrypt of filesToEncrypt) {
@@ -348,7 +367,7 @@ async function decryptCommand(args) {
     return console.log(chalk`{red.bold No files to decrypt}`);
   }
 
-  const password = await ask(chalk`{bold Enter password}`);
+  const password = await askPassword();
   const secretKey = getSecretKey(password);
 
   for (const fileToDecrypt of filesToDecrypt) {
@@ -370,7 +389,7 @@ async function diffCommand(args) {
     return console.log(chalk`{red.bold No files found to diff}`);
   }
 
-  const password = await ask(chalk`{bold Enter password}`);
+  const password = await askPassword();
   const secretKey = getSecretKey(password);
 
   for (const file of filesToDiff) {

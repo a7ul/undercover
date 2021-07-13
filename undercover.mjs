@@ -76,8 +76,9 @@ function getDestFile(file) {
 }
 
 function printTitle() {
-  console.log(chalk`
-🕵️  {bold.green Undercover}: {visible Store your environment variables and secrets in git safely.}`);
+  console.log(
+    `\n🕵️  Undercover: Store your environment variables and secrets in git safely.`
+  );
 }
 
 class OrderedKeyVal {
@@ -163,7 +164,7 @@ async function askPassword() {
     }
   });
   return new Promise((resolve) => {
-    rl.question(chalk`{bold Enter password}\n> `, function (password) {
+    rl.question(`\n🔑 Enter password\n> `, function (password) {
       resolve(password);
       rl.close();
     });
@@ -194,9 +195,7 @@ async function showDiff(encFile, secretKey) {
     content = decrypt(content, secretKey).trim();
   }
   const originalFile = getDestFile(encFile);
-  console.log(
-    chalk`{bold.magenta diff between ${encFile.filepath} & ${originalFile.filepath}}`
-  );
+  console.log(`Diffing ${encFile.filepath} <-> ${originalFile.filepath} 👀`);
   $.verbose = false;
   const output =
     await $`git --no-pager diff --color $(echo ${content} | git hash-object -w --stdin) ${originalFile.filepath}`.catch(
@@ -204,7 +203,7 @@ async function showDiff(encFile, secretKey) {
     );
   $.verbose = true;
   if (!output.stdout && !output.stderr) {
-    console.log(chalk`{red.bold \nNo diff\n}`);
+    console.log(`\nNo changes ✨\n`);
   } else {
     console.log(output.stderr);
     console.log(output.stdout);
@@ -265,7 +264,7 @@ async function encryptFile(srcFile, secretKey) {
   switch (srcFile.type) {
     case FILE_TYPE.REGULAR.ENV: {
       console.log(
-        chalk`{bold.green Encrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+        `Encrypting values in ${srcFile.filepath} -> ${destFile.filepath} 🔏`
       );
       const existingKeyVal = new OrderedKeyVal();
       if (existingEncrypted) {
@@ -280,7 +279,7 @@ async function encryptFile(srcFile, secretKey) {
     }
     case FILE_TYPE.REGULAR.OTHER: {
       console.log(
-        chalk`{bold.green Encrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+        `Encrypting file ${srcFile.filepath} -> ${destFile.filepath} 🔐`
       );
       content = encryptIfChanged(content, existingEncrypted, secretKey);
       break;
@@ -302,14 +301,14 @@ async function decryptFile(srcFile, secretKey) {
   switch (srcFile.type) {
     case FILE_TYPE.ENC.ENV: {
       console.log(
-        chalk`{bold.green Decrypting values in} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+        `Decrypting values in ${srcFile.filepath} -> ${destFile.filepath} 🔓`
       );
       content = decryptDotEnvContent(content, secretKey);
       break;
     }
     case FILE_TYPE.ENC.OTHER: {
       console.log(
-        chalk`{bold.green Decrypting file} {magenta ${srcFile.filepath}} -> ${destFile.filepath}`
+        `Decrypting file ${srcFile.filepath} -> ${destFile.filepath} 🔓`
       );
       content = decrypt(content, secretKey);
       break;
@@ -342,7 +341,7 @@ async function encryptCommand(args) {
   }
 
   if (filesToEncrypt.length === 0) {
-    return console.log(chalk`{red.bold No files found to encrypt}`);
+    return console.log(`No files found to encrypt 😢`);
   }
 
   const password = await askPassword();
@@ -352,7 +351,7 @@ async function encryptCommand(args) {
     await encryptFile(fileToEncrypt, secretKey);
   }
 
-  console.log(chalk`{green.bold All files encrypted successfully} 🔐`);
+  console.log(`\nAll files encrypted successfully ✅`);
 }
 
 async function decryptCommand(args) {
@@ -364,7 +363,7 @@ async function decryptCommand(args) {
   );
 
   if (filesToDecrypt.length === 0) {
-    return console.log(chalk`{red.bold No files to decrypt}`);
+    return console.log(`No files to decrypt 😢`);
   }
 
   const password = await askPassword();
@@ -374,7 +373,7 @@ async function decryptCommand(args) {
     await decryptFile(fileToDecrypt, secretKey);
   }
 
-  console.log(chalk`{green.bold All files decrypted successfully} 🔐`);
+  console.log(`\nAll files decrypted successfully ✅`);
 }
 
 async function diffCommand(args) {
@@ -386,7 +385,7 @@ async function diffCommand(args) {
   );
 
   if (filesToDiff.length === 0) {
-    return console.log(chalk`{red.bold No files found to diff}`);
+    return console.log(`\nNo files found to diff 😢`);
   }
 
   const password = await askPassword();
@@ -399,8 +398,8 @@ async function diffCommand(args) {
 
 async function updateCommand() {
   const answer = await ask(
-    chalk`{bold This will update undercover to latest version. Continue?}`,
-    [chalk`{green yes}`, chalk`{red no}`]
+    `✨ This will update undercover to latest version. Continue?`,
+    [`yes`, `no`]
   );
   if (!answer.toLowerCase().trim().startsWith("y")) {
     return;
@@ -415,66 +414,65 @@ async function updateCommand() {
       encoding: "utf8",
       flag: "w",
     });
-    chalk.green("Updated successfully! 🚀");
+    console.log("Updated successfully! ✅");
   } else {
-    console.error(chalk`{red.bold Failed to update!}`, await resp.text());
+    console.error(`Failed to update! 😢`, await resp.text());
     process.exit(-1);
   }
 }
 
 function helpCommand() {
   printTitle();
-  console.log(chalk`
-{bold.underline Usage:} {bold ./undercover.mjs} {magenta <command> [options]} <file...> | <dir...>
+  console.log(`
+📖 Usage: ./undercover.mjs <command> [options] <file...> | <dir...>
 
-{bold.underline Command:}
+Commands:
+---------
 
-{bold.magenta encrypt:} {bold undercover.mjs} {magenta encrypt [-f | -e]} <file...> | <dir...>
-{visible
-  Encrypts the file using a secret. 
-  If the file is detected as a dot env file, then only the values are encrypted and keys are left in plain text. 
-  This makes it easy to see changes in the git diff.
-  For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
-}
-  <file> {visible encrypt this file.}
-  <dir>  {visible encrypt all files in this directory.}
-  -f     {visible force encrypt entire file.}
-  -e     {visible force encrypt a file as if it was an env file. Encrypt only the values.}
+🔐 encrypt: undercover.mjs encrypt [-f | -e] <file...> | <dir...>
+
+   Encrypts the file using a secret. 
+   If the file is detected as a dot env file, then only the values are encrypted and keys are left in plain text. 
+   This makes it easy to see changes in the git diff.
+   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
+
+   <file>  encrypt this file.
+   <dir>   encrypt all files in this directory.
+   -f      force encrypt entire file.
+   -e      force encrypt a file as if it was an env file. Encrypt only the values.
  
-{bold.magenta decrypt:} {bold undercover.mjs} {magenta decrypt} <file.crypt...> | <file.ecrypt...> | <dir...>
-{visible
-  Decrypts the file using the secret provided in the prompt.
-  For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
-}
-  <dir>  {visible decrypt all files in this directory.}
+🔓 decrypt: undercover.mjs decrypt <file.crypt...> | <file.ecrypt...> | <dir...>
 
-{bold.magenta diff:} {bold undercover.mjs} {magenta diff} <file.crypt...> | <file.ecrypt...> | <dir...>
-{visible
-  Displays the diff between the input encrypted file and the original file.
-  Useful for checking what will change in the encrypted file if you encrypt the original file now.
-}
-  <dir>  {visible show diff for all encrypted files in this directory.}
+   Decrypts the file using the secret provided in the prompt.
+   For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
+
+   <dir>  decrypt all files in this directory.
+
+👀 diff: undercover.mjs diff <file.crypt...> | <file.ecrypt...> | <dir...>
+
+   Displays the diff between the input encrypted file and the original file.
+   Useful for checking what will change in the encrypted file if you encrypt the original file now.
+
+   <dir>  show diff for all encrypted files in this directory.
   
+✨ update: undercover.mjs update
 
-{bold.magenta update:} {bold undercover.mjs} {magenta update}
-{visible
-  Update this script to latest available version.
-}  
+   Update this script to latest available version.  
 
-{bold.magenta help:} {bold undercover.mjs} {magenta help}
-{visible
-  Show this help text.
-}`);
+💛 help: undercover.mjs help
+
+   Show this help text.
+`);
 }
 
 function unknownCommand(command) {
   printTitle();
   console.error(
-    chalk`\n{bold.red Error:} {red ${
-      command ? `Unknown command: ${command}!` : `No command specified!`
-    }}\n`
+    `\nError: ${
+      command ? `Unknown command: ${command} 🤷` : `No command specified 😢`
+    }\n`
   );
-  console.error(chalk`For help: {bold undercover.mjs} {bold.magenta help}`);
+  console.error(`Try: undercover.mjs help`);
   process.exit(-1);
 }
 

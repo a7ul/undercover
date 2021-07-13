@@ -187,8 +187,14 @@ async function ask(q = "Question?", choices = []) {
   if (allChoices) {
     ques = q + "\n" + allChoices + "\n> ";
   }
-  const choice = await question(ques, { choices }).catch((e) => e);
-  return choice;
+  const { stdin, stdout } = process;
+  const rl = readline.createInterface({ input: stdin, output: stdout });
+  return new Promise((resolve) => {
+    rl.question(ques, function (answer) {
+      resolve(answer);
+      rl.close();
+    });
+  });
 }
 async function askPassword() {
   const { stdin, stdout } = process;

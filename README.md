@@ -2,7 +2,7 @@
 
 Store your environment variables and secrets in git safely.
 
-This script is based on the amazing [google/zx](https://github.com/google/zx).
+This script is a single file pure nodejs script.
 
 ## Quick use (no install)
 
@@ -16,13 +16,12 @@ You can use undercover by just copying it and commiting it in your repo.
 
 ```
 curl https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs > undercover.mjs
-npx zx ./undercover.mjs
+node ./undercover.mjs
 ```
 
 or manually
 
 ```
-npm install -g zx
 curl https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs > undercover.mjs
 chmod a+x ./undercover.mjs
 ./undercover.mjs
@@ -75,7 +74,7 @@ Displays the diff between the encrypted file and the decrypted file.
 
 ## Development
 
-- Run tests: `NODE_ENV=test zx ./tests/run.mjs`
+- Run tests: `NODE_ENV=test node ./tests/run.mjs`
 
 ## References
 

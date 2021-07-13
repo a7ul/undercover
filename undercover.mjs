@@ -11,6 +11,7 @@ import readline from "readline";
 import path from "path";
 import { spawn } from "child_process";
 import fs from "fs/promises";
+import https from "https";
 
 const ENCRYPTION_DELIMITER = ".";
 const ENC_ENV_EXT = ".ecrypt";
@@ -28,6 +29,18 @@ const FILE_TYPE = {
 };
 
 // Utlities
+
+function fetch(url) {
+  let data = "";
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => resolve({ status: res.statusCode, data }));
+      })
+      .on("error", (err) => reject(err));
+  });
+}
 
 function shellEscape(arg) {
   if (/^[a-z0-9_.-/]+$/i.test(arg)) {
@@ -447,18 +460,18 @@ async function updateCommand() {
     return;
   }
   const UPDATE_URL =
-    "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs";
+    "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs2";
   const currentFilePath = import.meta.url.replace("file://", "");
   const resp = await fetch(UPDATE_URL);
-  if (resp.ok) {
-    const script = await resp.text();
+  if (resp.status >= 200 && resp.status < 300) {
+    const script = resp.data;
     await fs.writeFile(currentFilePath, script, {
       encoding: "utf8",
       flag: "w",
     });
     console.log("Updated successfully! ✅");
   } else {
-    console.error(`Failed to update! 😢`, await resp.text());
+    console.error(`Failed to update! 😢. \nReason:`, resp.data);
     process.exit(-1);
   }
 }

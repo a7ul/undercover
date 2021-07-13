@@ -181,7 +181,7 @@ async function getFiles(fileOrDirectoryNames) {
   }));
 }
 
-async function ask(q = "Question?", choices = []) {
+async function ask(q = "Question?", choices = [], maskInput = false) {
   let ques = q + " ";
   const allChoices = choices.join("\n");
   if (allChoices) {
@@ -189,6 +189,18 @@ async function ask(q = "Question?", choices = []) {
   }
   const { stdin, stdout } = process;
   const rl = readline.createInterface({ input: stdin, output: stdout });
+
+  if (maskInput) {
+    rl.input.on("keypress", function (c, k) {
+      const len = rl.line.length;
+      readline.moveCursor(rl.output, -len, 0);
+      readline.clearLine(rl.output, 1);
+      for (var i = 0; i < len; i++) {
+        rl.output.write("*");
+      }
+    });
+  }
+
   return new Promise((resolve) => {
     rl.question(ques, function (answer) {
       resolve(answer);
@@ -197,22 +209,7 @@ async function ask(q = "Question?", choices = []) {
   });
 }
 async function askPassword() {
-  const { stdin, stdout } = process;
-  const rl = readline.createInterface({ input: stdin, output: stdout });
-  rl.input.on("keypress", function (c, k) {
-    const len = rl.line.length;
-    readline.moveCursor(rl.output, -len, 0);
-    readline.clearLine(rl.output, 1);
-    for (var i = 0; i < len; i++) {
-      rl.output.write("*");
-    }
-  });
-  return new Promise((resolve) => {
-    rl.question(`\n🔑 Enter password\n> `, function (password) {
-      resolve(password);
-      rl.close();
-    });
-  });
+  return ask(`\n🔑 Enter password\n> `, [], true);
 }
 
 function processArgs(args) {

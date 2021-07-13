@@ -1,4 +1,4 @@
-#!/usr/bin/env zx
+#!/usr/bin/env node
 
 // :=================================:
 // : ./undercover.mjs                :
@@ -9,6 +9,8 @@
 import crypto from "crypto";
 import readline from "readline";
 import path from "path";
+import { spawn } from "child_process";
+import fs from "fs/promises";
 
 const ENCRYPTION_DELIMITER = ".";
 const ENC_ENV_EXT = ".ecrypt";
@@ -26,6 +28,42 @@ const FILE_TYPE = {
 };
 
 // Utlities
+
+function shellEscape(arg) {
+  if (/^[a-z0-9_.-/]+$/i.test(arg)) {
+    return arg;
+  }
+  return (
+    `$'` +
+    arg
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'")
+      .replace(/\f/g, "\\f")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t")
+      .replace(/\v/g, "\\v")
+      .replace(/\0/g, "\\0") +
+    `'`
+  );
+}
+
+function execute(command) {
+  const child = spawn(command, { shell: true, windowsHide: true });
+  if (process.stdin.isTTY) {
+    process.stdin.pipe(child.stdin);
+  }
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += d));
+  child.stderr.on("data", (d) => (stderr += d));
+  return new Promise((resolve, reject) => {
+    child.on("exit", (code) => {
+      const result = code === 0 ? resolve : reject;
+      result({ code, stdout, stderr });
+    });
+  });
+}
 
 function isEqualStr(a, b) {
   if (a.length !== b.length) {
@@ -196,12 +234,13 @@ async function showDiff(encFile, secretKey) {
   }
   const originalFile = getDestFile(encFile);
   console.log(`Diffing ${encFile.filepath} <-> ${originalFile.filepath} 👀`);
-  $.verbose = false;
-  const output =
-    await $`git --no-pager diff --color $(echo ${content} | git hash-object -w --stdin) ${originalFile.filepath}`.catch(
-      (err) => err
-    );
-  $.verbose = true;
+
+  const output = await execute(
+    `git --no-pager diff --color $(echo ${shellEscape(
+      content
+    )} | git hash-object -w --stdin) ${shellEscape(originalFile.filepath)}`
+  );
+
   if (!output.stdout && !output.stderr) {
     console.log(`\nNo changes ✨\n`);
   } else {
@@ -479,7 +518,7 @@ function unknownCommand(command) {
 // Main
 
 async function main() {
-  const [command, ...args] = process.argv.slice(3);
+  const [command, ...args] = process.argv.slice(2);
 
   switch (command) {
     case "encrypt":

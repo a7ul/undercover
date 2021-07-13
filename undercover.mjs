@@ -460,7 +460,7 @@ async function updateCommand() {
     return;
   }
   const UPDATE_URL =
-    "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs2";
+    "https://raw.githubusercontent.com/a7ul/undercover/main/undercover.mjs";
   const currentFilePath = import.meta.url.replace("file://", "");
   const resp = await fetch(UPDATE_URL);
   if (resp.status >= 200 && resp.status < 300) {

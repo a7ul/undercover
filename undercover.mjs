@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * undercover.mjs
+ * undercover.mjs v2.0
  * repo: https://github.com/a7ul/undercover
- * License: MIT
+ * license: MIT
  */
 
 import crypto from "crypto";
@@ -94,7 +94,7 @@ function detectFileType(filepath) {
   if (ext === ENC_OTHER_EXT) {
     return FILE_TYPE.ENC.OTHER;
   }
-  if (ext === ".env" || f.startsWith(".env." || f === ".env")) {
+  if (ext === ".env" || f.startsWith(".env.") || f === ".env") {
     return FILE_TYPE.REGULAR.ENV;
   }
   return FILE_TYPE.REGULAR.OTHER;

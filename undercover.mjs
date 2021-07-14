@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-// :=================================:
-// : ./undercover.mjs                :
-// : Author: Atul <github.com/a7ul>  :
-// : License: MIT                    :
-// :=================================:
+/**
+ * undercover.mjs
+ * repo: https://github.com/a7ul/undercover
+ * License: MIT
+ */
 
 import crypto from "crypto";
 import readline from "readline";

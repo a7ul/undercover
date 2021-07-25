@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * undercover.mjs v2.0
+ * undercover.mjs v2.1
  * repo: https://github.com/a7ul/undercover
  * license: MIT
  */
@@ -9,10 +9,12 @@
 import crypto from "crypto";
 import readline from "readline";
 import path from "path";
+import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import fs from "fs/promises";
 import https from "https";
 
+const scriptName = path.basename(fileURLToPath(import.meta.url));
 const ENCRYPTION_DELIMITER = ".";
 const ENC_ENV_EXT = ".ecrypt";
 const ENC_OTHER_EXT = ".crypt";
@@ -479,12 +481,12 @@ async function updateCommand() {
 function helpCommand() {
   printTitle();
   console.log(`
-📖 Usage: ./undercover.mjs <command> [options] <file...> | <dir...>
+📖 Usage: ./${scriptName} <command> [options] <file...> | <dir...>
 
 Commands:
 ---------
 
-🔐 encrypt: undercover.mjs encrypt [-f | -e] <file...> | <dir...>
+🔐 encrypt: ${scriptName} encrypt [-f | -e] <file...> | <dir...>
 
    Encrypts the file using a secret. 
    If the file is detected as a dot env file, then only the values are encrypted and keys are left in plain text. 
@@ -496,25 +498,25 @@ Commands:
    -f      force encrypt entire file.
    -e      force encrypt a file as if it was an env file. Encrypt only the values.
  
-🔓 decrypt: undercover.mjs decrypt <file.crypt...> | <file.ecrypt...> | <dir...>
+🔓 decrypt: ${scriptName} decrypt <file.crypt...> | <file.ecrypt...> | <dir...>
 
    Decrypts the file using the secret provided in the prompt.
    For any other file encrypts the entire file. Useful for things like service accounts, ssh keys etc.
 
    <dir>  decrypt all files in this directory.
 
-👀 diff: undercover.mjs diff <file.crypt...> | <file.ecrypt...> | <dir...>
+👀 diff: ${scriptName} diff <file.crypt...> | <file.ecrypt...> | <dir...>
 
    Displays the diff between the input encrypted file and the original file.
    Useful for checking what will change in the encrypted file if you encrypt the original file now.
 
    <dir>  show diff for all encrypted files in this directory.
   
-✨ update: undercover.mjs update
+✨ update: ${scriptName} update
 
    Update this script to latest available version.  
 
-💛 help: undercover.mjs help
+💛 help: ${scriptName} help
 
    Show this help text.
 `);
@@ -527,7 +529,7 @@ function unknownCommand(command) {
       command ? `Unknown command: ${command} 🤷` : `No command specified 😢`
     }\n`
   );
-  console.error(`Try: undercover.mjs help`);
+  console.error(`Try: ${scriptName} help`);
   process.exit(-1);
 }
 

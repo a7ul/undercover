@@ -1,5 +1,7 @@
 # 🕵️ Undercover
 
+> ⚠️ This project is now deprecated. Please take a look at https://github.com/a7ul/secrets.mjs
+
 Store your environment variables and secrets in git safely.
 
 This script is a single file pure nodejs script.
